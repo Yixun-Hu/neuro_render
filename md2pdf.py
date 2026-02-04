@@ -7,6 +7,7 @@ Markdown to PDF (VSCode-preview-like) via:
 - WeasyPrint
 ```
 pip install markdown pygments matplotlib weasyprint==59.0 pydyf==0.8.0
+pip install latex2mathml
 ```
 Usage:
     python md2pdf.py input.md [output.pdf]
@@ -166,6 +167,14 @@ def convert_md_to_pdf(input_file: str, output_file: str = None, pygments_style: 
     @page {{
         size: A4;
         margin: 2cm;
+        
+        /* Page Numbers */
+        @bottom-left {{
+            content: counter(page) " / " counter(pages);
+            font-family: -apple-system, system-ui, sans-serif;
+            font-size: 9pt;
+            color: #6e7781;
+        }}
     }}
 
     /* Body typography close to VSCode/GitHub markdown */

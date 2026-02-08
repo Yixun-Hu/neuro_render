@@ -33,7 +33,7 @@ $$
 \gamma(x) = [x, \sin(2^0 x), \cos(2^0 x), \sin(2^1 x), \cos(2^1 x), \ldots, \sin(2^{L-1} x), \cos(2^{L-1} x)]
 $$
 
-This follows Section 5.1 of the NeRF paper, allowing the network to represent high-frequency variations in color and geometry.
+This follows Section 5.1 of the NeRF paper, allowing the network to represent high-frequency variations in color and geometry. For code level implementation, I followed the hint to use `lambda` function to apply the periodic functions to the input.
 
 ---
 
@@ -61,9 +61,9 @@ self.rgb_linear = nn.Linear(W // 2, 3)     # RGB color
 
 - **Position branch**: 8 fully-connected layers (256 channels each) with a skip connection at layer 5 that concatenates the input features
 
-- **Density output**: View-independent σ predicted directly from position features
+- **Density output**: View-independent $\sigma$ predicted directly from position features. The alpha linear layer is a one-dimensional linear layer that outputs the volume density.
 
-- **Color output**: View-dependent RGB predicted after concatenating position features with view direction encoding
+- **Color output**: View-dependent RGB predicted after concatenating position features with view direction encoding. The rgb linear layer is a three-dimensional linear layer that outputs the RGB color.
 
 ---
 
@@ -73,12 +73,16 @@ The renderer implements classical volume rendering with three key components:
 
 #### 1.3.1 3D Point Sampling
 
+Given a ray origin **o** and direction **d**, I evaluate points at sampled depths $t$ using the parametric ray equation. Broadcasting allows this to be computed efficiently for all rays and all samples simultaneously, producing a tensor of shape `[N_rays, N_samples, 3]`.
+
 ```python
 # Parametric ray equation: p(t) = o + t*d
 pts = rays_o[..., None, :] + rays_d[..., None, :] * z_vals[..., :, None]
 ```
 
-#### 1.3.2 Alpha Computation (Beer-Lambert Law)
+#### 1.3.2 Alpha Computation
+
+The alpha value represents the opacity of each sample segment along the ray. As light travels through a medium with volume density $\sigma$ over a distance $\delta$, the fraction of light absorbed is $1 - e^{-\sigma \delta}$. ReLU is applied to the raw density to ensure $\sigma \geq 0$, which is physically meaningful (negative density has no real-world interpretation).
 
 ```python
 # α = 1 - exp(-σ * δ)
@@ -86,6 +90,8 @@ alpha = 1. - torch.exp(-act_fn(raw) * dists)
 ```
 
 #### 1.3.3 Volume Rendering Integration
+
+The final pixel color is computed via numerical quadrature of the volume rendering integral. Each sample's contribution depends on two factors: (1) the transmittance $T_i$, i.e., how much light has **not** been blocked by samples closer to the camera, and (2) the local opacity $\alpha_i$. The transmittance is computed as an exclusive cumulative product of $(1 - \alpha)$. The resulting weights $w_i = T_i \cdot \alpha_i$ naturally sum to at most 1, and are used to aggregate color and depth via weighted sums.
 
 ```python
 # Transmittance: T_i = Π_{j<i}(1 - α_j)
@@ -142,25 +148,14 @@ depth_map = torch.sum(weights * z_vals, -1)
 
 ## 3. Novel View Synthesis Videos
 
-The trained models generate smooth novel view animations along spiral camera paths:
+I changed the camera path from spiral to a sweeping path around the scene.
 
-- **Lego RGB**: `logs/blender_paper_lego/blender_paper_lego_spiral_200000_rgb.mp4`
+```python
+# render_poses = torch.stack([pose_spherical(angle, -30.0, 4.0) for angle in np.linspace(-180,180,40+1)[:-1]], 0)
+render_poses = torch.stack([
+    pose_spherical(0, phi, 4.0)
+    for phi in np.linspace(-30, -90, 60)
+], 0)
+```
 
-- **Lego Depth**: `logs/blender_paper_lego/blender_paper_lego_spiral_200000_disp.mp4`
-
-- **Fern RGB**: `logs/fern_test/fern_test_spiral_200000_rgb.mp4`
-
-- **Fern Depth**: `logs/fern_test/fern_test_spiral_200000_disp.mp4`
-
-These videos demonstrate the model's ability to synthesize consistent, high-quality views from novel camera positions not seen during training.
-
----
-
-## 4. Conclusion
-
-The NeRF implementation successfully learns implicit 3D scene representations from 2D images. Key observations:
-
-1. **Positional encoding** is critical for capturing high-frequency details
-2. **Hierarchical sampling** (coarse + fine networks) improves rendering efficiency and quality
-3. **View-dependent appearance** enables realistic specular and reflective effects
-4. Training converges around 150K-200K iterations for both synthetic and real scenes
+The videos are shown in [custom_rgb.mp4](./custom_rgb.mp4). This demonstrate the model's ability to synthesize consistent, high-quality views from novel camera positions not seen during training.

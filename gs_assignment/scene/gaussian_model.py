@@ -351,9 +351,10 @@ class GaussianModel:
         #-----   - Use self.percent_dense*scene_extent for covariance thresholding
         #------------------------------------------------------
 
-        assert False, 'Please finish the code before removing this assertion'
-
-        selected_pts_mask = ...
+        selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
+        selected_pts_mask = torch.logical_and(selected_pts_mask,
+            torch.max(self.get_scaling, dim=1).values > self.percent_dense*scene_extent
+        )
 
         stds = self.get_scaling[selected_pts_mask].repeat(N,1)
         stds = torch.cat([stds, 0 * torch.ones_like(stds[:,:1])], dim=-1)
@@ -386,9 +387,10 @@ class GaussianModel:
         #-----   - Use self.percent_dense*scene_extent for covariance thresholding
         #------------------------------------------------------
 
-        assert False, 'Please finish the code before removing this assertion'
-
-        selected_pts_mask = ...
+        selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
+        selected_pts_mask = torch.logical_and(selected_pts_mask,
+            torch.max(self.get_scaling, dim=1).values <= self.percent_dense*scene_extent
+        )
         
         new_xyz = self._xyz[selected_pts_mask]
         new_features_dc = self._features_dc[selected_pts_mask]
@@ -425,13 +427,11 @@ class GaussianModel:
         #-----     - Use 0.1 * extent for world space thresholding
         #------------------------------------------------------
 
-        assert False, 'Please finish the code before removing this assertion'
-
-        not_opaque_mask = ...
+        not_opaque_mask = (self.get_opacity < min_opacity).squeeze()
         prune_mask = not_opaque_mask
         if max_screen_size:
-            big_points_vs = ...
-            big_points_ws = ...
+            big_points_vs = self.max_radii2D > max_screen_size
+            big_points_ws = torch.max(self.get_scaling, dim=1).values > 0.1 * extent
             prune_mask = torch.logical_or(torch.logical_or(not_opaque_mask, big_points_vs), big_points_ws)
 
         self.prune_points(prune_mask)

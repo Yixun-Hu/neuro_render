@@ -162,7 +162,9 @@ def generate_path(viewpoint_cameras, n_frames=480):
   pose_recenter, colmap_to_world_transform = transform_poses_pca(pose)
 
   # generate new poses
+  # new_poses = generate_ellipse_path(poses=pose_recenter, n_frames=n_frames, z_variation=1.0)
   new_poses = generate_ellipse_path(poses=pose_recenter, n_frames=n_frames)
+
   # warp back to orignal scale
   new_poses = np.linalg.inv(colmap_to_world_transform) @ pad_poses(new_poses)
 

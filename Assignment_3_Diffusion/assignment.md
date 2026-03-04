@@ -33,12 +33,14 @@ You will implement the required functions in `src/ddpm.py`. Everything else is p
 
 ```bash
 # run the setup bash file:
-bash setup.sh
+bash setup.sh # do not run this if you are using 5090
 
 # or run each command seperately:
 conda create -n ddpm python=3.10 -y
 conda activate ddpm
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# for 5090
+# pip3 install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
 pip3 install matplotlib pillow scikit-learn
 ```
 

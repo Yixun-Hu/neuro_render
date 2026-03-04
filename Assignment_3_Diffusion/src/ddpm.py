@@ -63,8 +63,8 @@ def forward_diffusion_step(x_prev, t, noise, schedule):
     beta = torch.sqrt(schedule['betas'][t]).view(-1, *dims)
 
     # ============ YOUR CODE HERE ============
-    x_t = ...
-    raise NotImplementedError
+    alpha = torch.sqrt(schedule['alphas'][t]).view(-1, *dims)
+    x_t = alpha * x_prev + beta * noise
     # ============ END YOUR CODE ============
 
     return x_t
@@ -91,8 +91,7 @@ def q_sample(x_0, t, noise, schedule):
     alpha_bar_t = schedule['alphas_cumprod'][t].view(-1, *dims)
 
     # ============ YOUR CODE HERE ============
-    x_t = ...
-    raise NotImplementedError
+    x_t = torch.sqrt(alpha_bar_t) * x_0 + torch.sqrt(1.0 - alpha_bar_t) * noise
     # ============ END YOUR CODE ============
 
     return x_t
@@ -169,18 +168,18 @@ def ddpm_sample(model, shape, schedule, n_snapshot_steps=10, abl_no_noise=False,
             alpha_bar_t    = schedule['alphas_cumprod'][t]
 
             # ============ YOUR CODE HERE ============
-            mean = ...
+            mean = (1.0 / torch.sqrt(alpha_t)) * (
+                x - (beta_t / torch.sqrt(1.0 - alpha_bar_t)) * predicted_noise
+            )
 
             if t > 0:
-                sigma = ...
+                sigma = torch.sqrt(beta_t)
                 if abl_no_noise:
                     sigma = 0
 
                 x = mean + sigma * torch.randn_like(x)
             else:
                 x = mean
-
-            raise NotImplementedError
             # ============ END YOUR CODE ============
 
             if t % snapshot_interval == 0:

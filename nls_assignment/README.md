@@ -13,6 +13,7 @@ Environment above is not enough, use the following `.yaml` env spec file to crea
 
 ```bash
 conda env create -f nls.yml
+conda activate nls
 ```
 
 Train an NLS model

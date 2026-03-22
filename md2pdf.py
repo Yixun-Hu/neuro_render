@@ -238,6 +238,9 @@ def convert_md_to_pdf(input_file: str, output_file: str = None, pygments_style: 
     }}
 
     /* Math */
+    /* NOTE: inline math is rendered as <img>, so it must override the generic
+       image rule below. Otherwise every inline formula is forced onto its
+       own centered line in the PDF. */
     .math-block {{
         text-align: center;
         margin: 10px 0 14px 0;
@@ -247,6 +250,10 @@ def convert_md_to_pdf(input_file: str, output_file: str = None, pygments_style: 
         height: auto;
     }}
     img.math-inline {{
+        display: inline;
+        margin: 0;
+        width: auto;
+        max-width: none;
         height: 1.15em;
         vertical-align: -0.15em;
     }}

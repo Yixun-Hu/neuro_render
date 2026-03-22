@@ -3,7 +3,7 @@
 > Name: Yixun Hu
 > NetID: yh4742
 
-I used my classmate's data to train the model, and the scan folder is `processed_2025_03_06_15_45_13-temp4`.
+I used TA's data to train the model. Data from classmate caused OOM error on my machine, and the scan folder is `processed_2025_03_06_15_45_13-temp4`.
 
 ## 1. Implementation Description
 

@@ -52,11 +52,11 @@ As time progresses, the rendered viewpoint smoothly sweeps across the captured s
 
 ### 2.2 Varying FOV Scale
 
-The `fov_scale` parameter scales the horizontal field of view, simulating a wider-angle lens.
+The `fov_scale` parameter scales the horizontal field of view (range 0.5–2.0), simulating narrower or wider-angle lenses.
 
 ![FOV sweep](report_images/fov_sweep.png)
 
-At `fov_scale=1.0`, the render matches the original camera FOV. As `fov_scale` increases to 2.0–2.5, the render reveals a much wider view of the scene — effectively turning the captured data into an ultra-wide or fisheye-like panorama.
+At `fov_scale=0.5`, the render shows a narrow crop of the scene. At `fov_scale=1.0`, it matches the original camera FOV. At `fov_scale=2.0`, the render reveals a much wider view — but noise and artifacts appear at the periphery where the model was never supervised, as those ray directions fall outside the original capture.
 
 ### 2.3 Varying Offsets
 
@@ -134,15 +134,13 @@ All three comparisons below share the same camera setup: `time=0.65`, `fov_scale
 
 1. **Extreme FOV (fov_scale > 3.0)**: At very wide fields of view, the model is asked to render directions that were never observed during the phone sweep. The sphere surface in these unobserved regions produces blurry, repetitive, or color-shifted artifacts because the neural field was never supervised there.
 
-2. **Temporal boundaries (t=0.0 and t=1.0)**: At the very start and end of the captured sequence, only one neighboring frame is available for interpolation. The model has less multi-view supervision at these extremes, leading to reduced quality and potential ghosting.
-
-3. **Large camera offsets**: Moving the virtual camera origin far from where training data was captured (e.g., translation offset of 0.7 along X and Z) forces the model to extrapolate parallax effects it was never trained on. Since the light sphere is fundamentally a 2D surface, it cannot correctly synthesize novel parallax — nearby objects distort or smear while distant regions remain relatively intact.
+2. **Large camera offsets**: Moving the virtual camera origin far from where training data was captured (e.g., translation offset of 0.7 along X and Z) forces the model to extrapolate parallax effects it was never trained on. Since the light sphere is fundamentally a 2D surface, it cannot correctly synthesize novel parallax — nearby objects distort or smear while distant regions remain relatively intact.
 
 ### Additional Failure Modes (from the paper)
 
-4. **Fast occluders / transient objects**: Objects that move quickly through the scene during capture (e.g., cars, pedestrians, cyclists) cannot be compactly modeled as a view-dependent effect on the sphere surface. These appear as transient ghosting artifacts in the final render, because the model tries to "average" the moving object across its different positions in different frames.
+3. **Fast occluders / transient objects**: Objects that move quickly through the scene during capture (e.g., cars, pedestrians, cyclists) cannot be compactly modeled as a view-dependent effect on the sphere surface. These appear as transient ghosting artifacts in the final render, because the model tries to "average" the moving object across its different positions in different frames.
 
-5. **Out-of-distribution camera motion**: If the input capture is primarily a horizontal pan, the model has insufficient information to support large vertical camera movements at render time. Requesting a vertical offset or rotation that the training data never covered produces degraded or hallucinated content, since the sphere was never supervised from those directions.
+4. **Out-of-distribution camera motion**: If the input capture is primarily a horizontal pan, the model has insufficient information to support large vertical camera movements at render time. Requesting a vertical offset or rotation that the training data never covered produces degraded or hallucinated content, since the sphere was never supervised from those directions.
 
 ### Why This Happens
 

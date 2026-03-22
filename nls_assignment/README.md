@@ -9,6 +9,11 @@ conda activate nls
 pip install -r requirements.txt
 pip3 install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
 ```
+Environment above is not enough, use the following `.yaml` env spec file to create the environment:
+
+```bash
+conda env create -f nls.yml
+```
 
 Train an NLS model
 

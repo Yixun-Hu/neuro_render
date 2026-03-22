@@ -72,19 +72,23 @@ Moving the camera origin causes parallax-like shifts in the rendered perspective
 
 A spherical representation is natural for panoramic stitching for several reasons:
 
-1. **Uniform angular coverage**: A sphere maps every direction from a central viewpoint uniformly. Unlike planar projections (which distort at wide angles), a sphere can represent a full $4\pi$ steradians of directions without singularities or excessive distortion.
+1. **Natural fit for panorama / outward-facing capture**: Panoramic imaging is fundamentally about looking outward from a central viewpoint in all directions. Mapping rays onto a sphere aligns directly with this imaging geometry, far more so than planar or volumetric representations.
 
-2. **Rotation invariance**: Camera rotation during a phone sweep corresponds to simply indexing different points on the sphere surface. The sphere decouples rotation from translation, making it straightforward to compose multiple frames captured at different orientations.
+2. **Well-suited for rotation-dominant motion**: During a phone sweep, the camera primarily rotates rather than translates. Many observations are essentially different viewing directions of an "enclosing shell" around the observer. A spherical surface naturally represents this, making the representation more stable under rotational camera motion.
 
-3. **Compact, bounded domain**: The unit sphere provides a naturally bounded $[−1, 1]^3$ domain that maps cleanly to the $[0, 1]^3$ input range required by hash grid encodings (TCNN). This avoids the unbounded coordinates that would arise with a planar or volumetric representation.
+3. **Avoids volumetric sampling — faster rendering**: The paper replaces NeRF's expensive volume sampling with a single ray-sphere intersection, making the model much lighter and faster (~80 MB/scene, ~50 FPS at 1080p). Each ray maps to exactly one point on the sphere, eliminating the need for per-ray density integration.
 
-4. **No depth ambiguity**: Unlike NeRF-style volumetric models that must reason about density along rays, the light sphere is a 2D surface — each ray maps to exactly one intersection point, making it computationally efficient for the panoramic use case where the scene is distant relative to camera motion.
+4. **Compact storage**: Although the hash-grid encoding operates in 3D world space on the unit sphere, only the surface region of the sphere is actually accessed — not the full volume. This means storage complexity scales with the surface area rather than the cube, making the representation very compact.
+
+5. **Avoids spherical coordinate singularities**: The model encodes sphere intersection points directly in 3D Cartesian coordinates ($x, y, z$ mapped to $[0, 1]$) rather than converting to spherical coordinates ($\theta, \phi$). This avoids the nonlinear projection and pole singularities inherent in spherical coordinate systems.
+
+6. **Bounded domain for hash-grid encoding**: The unit sphere provides a naturally bounded $[-1, 1]^3$ domain that maps cleanly to the $[0, 1]^3$ input range required by TCNN hash grid encodings, without needing scene-specific normalization or dealing with unbounded coordinates.
 
 ---
 
 ## 4. Why Does Two-Stage Training Help Convergence?
 
-The NLS model uses progressive/masked training controlled by `training_phase` (0 → 1):
+The NLS model uses progressive/masked training controlled by `training_phase` (0 to 1):
 
 1. **Early stage (phase < 0.2)**: Only coarse translation and low-frequency color features are active. The offset network is disabled. Random perturbations are added to ray origins to prevent overfitting to exact camera positions. This lets the model first learn the coarse spatial layout and average colors.
 
@@ -100,13 +104,13 @@ This coarse-to-fine strategy helps because:
 
 ## 5. Toggle Comparisons
 
-All comparisons below are rendered at `time=0.5`, `fov_scale=1.5`, with default offsets.
+All three comparisons below share the same camera setup: `time=0.65`, `fov_scale=1.8`, translation offset `(x, y, z) = (0.25, -0.05, 0.20)`. This viewpoint is moderately off-center — enough to require geometric compensation, but not so extreme that the rendering breaks down entirely.
 
 ### 5.1 Ray Offset (ON vs OFF)
 
 ![Ray offset toggle](report_images/toggle_ray_offset.png)
 
-**Difference**: With ray offset ON, the model applies a learned per-ray angular correction that compensates for misalignment between frames. Turning it OFF removes this correction, which can cause subtle ghosting or blurring at object boundaries where frames don't perfectly align. The ray offset acts as a spatially-varying deformation that improves sharpness.
+**Difference**: With ray offset ON, the model applies a learned per-ray angular correction that compensates for misalignment between frames. Turning it OFF removes this correction, which can cause subtle ghosting or blurring at object boundaries and edges where frames don't perfectly align. However, in this scene, the effect of ray offset is relatively subtle. Turning it off slightly softens thin structures and object boundaries, especially near the image periphery, but the difference is much smaller than the view-color ablation. A likely reason is that this outdoor street scene is dominated by mid- to far-depth geometry and contains limited strong foreground parallax, so the learned ray correction has less to compensate.
 
 ### 5.2 View-Dependent Color (ON vs OFF)
 
@@ -126,14 +130,20 @@ All comparisons below are rendered at `time=0.5`, `fov_scale=1.5`, with default 
 
 ![Breakdown examples](report_images/breakdown.png)
 
-### Observed Failure Cases
+### Observed Failure Cases (shown in the figure above)
 
 1. **Extreme FOV (fov_scale > 3.0)**: At very wide fields of view, the model is asked to render directions that were never observed during the phone sweep. The sphere surface in these unobserved regions produces blurry, repetitive, or color-shifted artifacts because the neural field was never supervised there.
 
 2. **Temporal boundaries (t=0.0 and t=1.0)**: At the very start and end of the captured sequence, only one neighboring frame is available for interpolation. The model has less multi-view supervision at these extremes, leading to reduced quality and potential ghosting.
 
-3. **Large camera offsets**: Moving the virtual camera origin far from where training data was captured forces the model to extrapolate parallax effects it was never trained on. Since the light sphere is fundamentally a 2D surface (no true 3D geometry), it cannot correctly render novel parallax for nearby objects.
+3. **Large camera offsets**: Moving the virtual camera origin far from where training data was captured (e.g., translation offset of 0.7 along X and Z) forces the model to extrapolate parallax effects it was never trained on. Since the light sphere is fundamentally a 2D surface, it cannot correctly synthesize novel parallax — nearby objects distort or smear while distant regions remain relatively intact.
+
+### Additional Failure Modes (from the paper)
+
+4. **Fast occluders / transient objects**: Objects that move quickly through the scene during capture (e.g., cars, pedestrians, cyclists) cannot be compactly modeled as a view-dependent effect on the sphere surface. These appear as transient ghosting artifacts in the final render, because the model tries to "average" the moving object across its different positions in different frames.
+
+5. **Out-of-distribution camera motion**: If the input capture is primarily a horizontal pan, the model has insufficient information to support large vertical camera movements at render time. Requesting a vertical offset or rotation that the training data never covered produces degraded or hallucinated content, since the sphere was never supervised from those directions.
 
 ### Why This Happens
 
-The neural light sphere maps rays to colors on a fixed spherical surface. It works well within the observed distribution of camera poses and directions, but has no mechanism for true 3D geometric reasoning. When asked to render from significantly different viewpoints or at extreme angles, it must extrapolate from its 2D representation, which inherently cannot capture view-dependent parallax for objects at different depths.
+The neural light sphere maps rays to colors on a fixed spherical surface. It works well within the observed distribution of camera poses and directions, but has no mechanism for true 3D geometric reasoning. When asked to render from significantly different viewpoints or at extreme angles, it must extrapolate from its 2D representation, which inherently cannot capture view-dependent parallax for objects at different depths. Similarly, dynamic scene content violates the static-scene assumption underlying the model.
